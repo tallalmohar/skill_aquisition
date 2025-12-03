@@ -1,5 +1,5 @@
 import os
-from sqlmodel import create_engine, SQLModel
+from sqlmodel import create_engine, SQLModel, Session
 
 sqlite_file_name = "gymprogress.db"
 sqllite_url = f"sqlite:///{sqlite_file_name}"
@@ -14,3 +14,7 @@ engine = create_engine(db_url)
 
 def create_file_db():
 	SQLModel.metadata.create_all(engine)
+
+def get_session():
+	with Session(engine) as session:
+		yield session
