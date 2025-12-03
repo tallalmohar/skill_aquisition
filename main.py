@@ -57,7 +57,8 @@ def create_workout(workout_name : WorkoutCreate, session: Session = Depends(get_
 	Docstring for create_workout
 	
 	:param workout_name: name of the Workout to add (Ex. Push Day)
-	:type workout_name: str
+	:type workout_name: WorkoutCreate
+
 	:return: returns a Workout Object after adding it to the database
 	:rtype: Workout
 	"""
@@ -74,6 +75,18 @@ def add_exercise_to_workout(
 	exercise_to_add : ExerciseCreate,
 	session : Session = Depends(get_session)
 	) -> Exercise:
+	"""
+	Docstring for add_exercise_to_workout
+	
+	:param workout_id: Choose the workout you want to add to
+	:type workout_id: int
+
+	:param exercise_to_add: ExerciseCreate Object: you add name,sets,weight and reps
+	:type exercise_to_add: ExerciseCreate
+
+	:return: Returns Exercise Objects after being pushed to Database
+	:rtype: Exercise
+	"""
 	workout_to_add_to = session.get(Workout, workout_id)
 	if workout_to_add_to is None:
 		raise HTTPException(status_code=404, detail="Workout Session doesn't exist!")
