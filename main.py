@@ -1,9 +1,8 @@
 from fastapi import FastAPI, HTTPException, Depends
 from sqlmodel import SQLModel, Field, Session, select, Relationship
 from datetime import datetime
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 from database import create_file_db, engine, get_session
-from datetime import datetime
 
 
 # Child Model: many exercises can reference a single workout
@@ -37,6 +36,11 @@ class ExerciseCreate(SQLModel):
 	sets : int
 	reps : int
 	weight : float
+
+class ExerciseRead(SQLModel):
+	to_update : str
+	update_data : Any
+
 
 
 app = FastAPI()
@@ -84,7 +88,7 @@ def add_exercise_to_workout(
 	:param exercise_to_add: ExerciseCreate Object: you add name,sets,weight and reps
 	:type exercise_to_add: ExerciseCreate
 
-	:return: Returns Exercise Objects after being pushed to Database
+	:return: Returns Exercise Objects after being pushed to Databaset
 	:rtype: Exercise
 	"""
 	workout_to_add_to = session.get(Workout, workout_id)
@@ -97,3 +101,59 @@ def add_exercise_to_workout(
 		session.commit()
 		session.refresh(db_exercise_to_add)
 	return db_exercise_to_add
+
+
+@app.get("/workouts")
+def get_all_workouts(session : Session = Depends(get_session)):
+	"""
+	Just Returns all of the workouts 
+	"""
+	results = session.exec(select(Workout)).all()
+	return [r for r in results]
+
+@app.get("/workouts/{workout_id}")
+def get_workout_with_id(workout_id : int, session : Session = Depends(get_session))-> List[Exercise]:
+	"""
+	Docstring for get_workout_with_id
+	
+	:param workout_id: Specific Workout that you want dependent of ID
+	:type workout_id: int
+
+	:return: A List of Exercises done on that day
+	:rtype: List[Exercise]
+	"""
+	exercises_in_workout = session.exec(select(Exercise).where(Exercise.workout_id == workout_id)).all()
+	return [e for e in exercises_in_workout]
+
+@app.patch("/workouts/{workout_id}")
+def edit_workout_name(update_name : str, workout_id : int, session : Session = Depends(get_session))-> Workout:
+	"""
+	Docstring for edit_workout_name
+	
+	:param update_name: New Workout Name
+	:type update_name: str
+	:param workout_id: Workout_id to Select the one you want to change
+	:type workout_id: int
+
+	:return: New Workout Name
+	:rtype: Workout
+	"""
+	workout_to_edit = session.get(Workout,workout_id)
+	workout_to_edit.workout_name = update_name
+	session.commit()
+	session.refresh(workout_to_edit)
+	return workout_to_edit
+
+
+@app.patch("/workouts/{exercise_id}",response_model=ExerciseRead)
+def update_exercise(exercise_id : int, to_update: str, update_data : Any , session : Session = Depends(get_session))->Exercise:
+	exercise_to_edit = session.get(Exercise,exercise_id)
+	if to_update.lower() == "reps":
+		exercise_to_edit.reps = update_data
+	elif to_update.lower() == "sets":
+		exercise_to_edit.sets = update_data
+	elif to_update.lower() == "weight":
+		exercise_to_edit.weight = update_data
+	session.commit()
+	session.refresh(exercise_to_edit)
+	return exercise_to_edit
