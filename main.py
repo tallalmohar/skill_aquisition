@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from sqlmodel import SQLModel, Field, Session, select, Relationship
 from datetime import datetime
 from typing import Dict, Optional, List, Any
-from database import create_file_db, engine, get_session
+from database import create_file_db, get_session
 
 
 # Child Model: many exercises can reference a single workout
@@ -37,9 +37,10 @@ class ExerciseCreate(SQLModel):
 	reps : int
 	weight : float
 
-class ExerciseRead(SQLModel):
-	to_update : str
-	update_data : Any
+class ExerciseUpdate(SQLModel):
+	sets : Optional[int] = None
+	reps : Optional[int] = None
+	weight : Optional[float] = None
 
 
 
@@ -73,7 +74,7 @@ def create_workout(workout_name : WorkoutCreate, session: Session = Depends(get_
 	return db_workout_model
 
 
-@app.post("/workouts/{workout_id}/exercises")
+@app.post("/workouts/exercises/{workout_id}")
 def add_exercise_to_workout(
 	workout_id : int,
 	exercise_to_add : ExerciseCreate,
@@ -94,12 +95,12 @@ def add_exercise_to_workout(
 	workout_to_add_to = session.get(Workout, workout_id)
 	if workout_to_add_to is None:
 		raise HTTPException(status_code=404, detail="Workout Session doesn't exist!")
-	else:
-		db_exercise_to_add = Exercise(**exercise_to_add.model_dump())
-		db_exercise_to_add.workout_id = workout_id
-		session.add(db_exercise_to_add)
-		session.commit()
-		session.refresh(db_exercise_to_add)
+
+	db_exercise_to_add = Exercise(**exercise_to_add.model_dump())
+	db_exercise_to_add.workout_id = workout_id
+	session.add(db_exercise_to_add)
+	session.commit()
+	session.refresh(db_exercise_to_add)
 	return db_exercise_to_add
 
 
@@ -109,6 +110,9 @@ def get_all_workouts(session : Session = Depends(get_session)):
 	Just Returns all of the workouts 
 	"""
 	results = session.exec(select(Workout)).all()
+	if results is None:
+		raise HTTPException(status_code=404, detail="No Workouts have been created")
+
 	return [r for r in results]
 
 @app.get("/workouts/{workout_id}")
@@ -123,6 +127,9 @@ def get_workout_with_id(workout_id : int, session : Session = Depends(get_sessio
 	:rtype: List[Exercise]
 	"""
 	exercises_in_workout = session.exec(select(Exercise).where(Exercise.workout_id == workout_id)).all()
+	if exercises_in_workout is None:
+		raise HTTPException(status_code=404, detail="No Exercises have been added to Workout")
+
 	return [e for e in exercises_in_workout]
 
 @app.patch("/workouts/{workout_id}")
@@ -139,21 +146,40 @@ def edit_workout_name(update_name : str, workout_id : int, session : Session = D
 	:rtype: Workout
 	"""
 	workout_to_edit = session.get(Workout,workout_id)
+	if workout_to_edit is None:
+		raise HTTPException(status_code=404, detail="Workout doesn't exist!")
+
 	workout_to_edit.workout_name = update_name
 	session.commit()
 	session.refresh(workout_to_edit)
 	return workout_to_edit
 
+@app.patch("/workouts/exercises/{exercise_id}")
+def update_exercise(
+		exercise_id : int,
+		updated_data : ExerciseUpdate,
+		session : Session = Depends(get_session)
+)-> Exercise :
+	"""
+	Docstring for update_exercise
+	
+	:param exercise_id: Exercise you want to update 
+	:type exercise_id: int
+	:param updated_data: Send the updated data, it only updates the part's being sent
+	:type updated_data: ExerciseUpdate
 
-@app.patch("/workouts/{exercise_id}",response_model=ExerciseRead)
-def update_exercise(exercise_id : int, to_update: str, update_data : Any , session : Session = Depends(get_session))->Exercise:
+	:return: Description
+	:rtype: Exercise
+	"""
+
 	exercise_to_edit = session.get(Exercise,exercise_id)
-	if to_update.lower() == "reps":
-		exercise_to_edit.reps = update_data
-	elif to_update.lower() == "sets":
-		exercise_to_edit.sets = update_data
-	elif to_update.lower() == "weight":
-		exercise_to_edit.weight = update_data
+	if exercise_to_edit is None:
+		raise HTTPException(status_code=404,detail="Excercise Not FOUND!!")
+	
+	exercise_dict = updated_data.model_dump(exclude_unset=True)
+	exercise_to_edit.sqlmodel_update(exercise_dict)
+	session.add(exercise_to_edit)
 	session.commit()
 	session.refresh(exercise_to_edit)
 	return exercise_to_edit
+
