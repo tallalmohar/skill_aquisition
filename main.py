@@ -183,3 +183,20 @@ def update_exercise(
 	session.refresh(exercise_to_edit)
 	return exercise_to_edit
 
+@app.delete("/workouts/{workout_id}")
+def delete_workouts(workout_id : int, session : Session = Depends(get_session))-> None:
+	workout_to_delete = session.get(Workout, workout_id)
+	if workout_to_delete is None:
+		raise HTTPException(status_code=404,detail="Workout Doesn't exist!")
+	session.delete(workout_to_delete)
+	session.commit()
+
+@app.delete("/exercise/{exercise_id}")	
+def delete_exercise(exercise_id : int, session: Session = Depends(get_session)) -> None:
+	exercise_to_delete = session.get(Exercise, exercise_id)
+	if exercise_to_delete is None:
+		raise HTTPException(status_code=404,detail="Exercise doesn't Exist!")
+	
+	session.delete(exercise_to_delete)
+	session.commit()
+	
