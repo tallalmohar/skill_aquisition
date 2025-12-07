@@ -37,6 +37,17 @@ class ExerciseCreate(SQLModel):
 	reps : int
 	weight : float
 
+class ExerciseRead(SQLModel):
+	exercise_name : str
+	sets : int
+	reps : int
+	weight : float
+
+class WorkoutReadWithExercises(SQLModel):
+	workout_name : Optional[str] = None
+	date : Optional[datetime] = None
+	exercises : List[ExerciseRead]
+
 class ExerciseUpdate(SQLModel):
 	sets : Optional[int] = None
 	reps : Optional[int] = None
@@ -53,6 +64,31 @@ def create_db():
 @app.get("/")
 def health() -> Dict[str, str | float]:
 	return {"health" : "active", "version" : 1.0}
+
+@app.get("/workouts/recents")
+def get_all_workouts_DESC_dates(session : Session = Depends(get_session)):
+	"""
+	Just Returns all recent workouts with descending dates
+	"""
+	results = session.exec(select(Workout).order_by(Workout.date.desc())).all()
+	if not results:
+		raise HTTPException(status_code=404, detail="No Workouts have been created")
+
+	return [r for r in results]
+
+@app.get("/workouts",response_model=List[WorkoutReadWithExercises])
+def get_all_workouts(session : Session = Depends(get_session)):
+	"""
+	Just Returns all of the workouts 
+	"""
+	from sqlalchemy.orm import selectinload
+
+	statement = select(Workout).options(selectinload(Workout.exercises))
+	results = session.exec(statement).all()
+	if not results:
+		raise HTTPException(status_code=404, detail="No Workouts have been created")
+
+	return results
 
 
 
@@ -104,18 +140,9 @@ def add_exercise_to_workout(
 	return db_exercise_to_add
 
 
-@app.get("/workouts")
-def get_all_workouts(session : Session = Depends(get_session)):
-	"""
-	Just Returns all of the workouts 
-	"""
-	results = session.exec(select(Workout)).all()
-	if results is None:
-		raise HTTPException(status_code=404, detail="No Workouts have been created")
 
-	return [r for r in results]
 
-@app.get("/workouts/{workout_id}")
+@app.get("/workouts/id/{workout_id}")
 def get_workout_with_id(workout_id : int, session : Session = Depends(get_session))-> List[Exercise]:
 	"""
 	Docstring for get_workout_with_id
@@ -127,12 +154,12 @@ def get_workout_with_id(workout_id : int, session : Session = Depends(get_sessio
 	:rtype: List[Exercise]
 	"""
 	exercises_in_workout = session.exec(select(Exercise).where(Exercise.workout_id == workout_id)).all()
-	if exercises_in_workout is None:
+	if not exercises_in_workout :
 		raise HTTPException(status_code=404, detail="No Exercises have been added to Workout")
 
 	return [e for e in exercises_in_workout]
 
-@app.patch("/workouts/{workout_id}")
+@app.patch("/workouts/id/{workout_id}")
 def edit_workout_name(update_name : str, workout_id : int, session : Session = Depends(get_session))-> Workout:
 	"""
 	Docstring for edit_workout_name
@@ -183,8 +210,14 @@ def update_exercise(
 	session.refresh(exercise_to_edit)
 	return exercise_to_edit
 
-@app.delete("/workouts/{workout_id}")
+@app.delete("/workouts/id/{workout_id}")
 def delete_workouts(workout_id : int, session : Session = Depends(get_session))-> None:
+	"""
+	Docstring for delete_workouts
+	
+	:param workout_id: The Workout you want to delete. This will delete the related exercises
+	:type workout_id: int
+	"""
 	workout_to_delete = session.get(Workout, workout_id)
 	if workout_to_delete is None:
 		raise HTTPException(status_code=404,detail="Workout Doesn't exist!")
@@ -193,10 +226,16 @@ def delete_workouts(workout_id : int, session : Session = Depends(get_session))-
 
 @app.delete("/exercise/{exercise_id}")	
 def delete_exercise(exercise_id : int, session: Session = Depends(get_session)) -> None:
+	"""
+	Docstring for delete_exercise
+	
+	:param exercise_id: The exercise you want to delete 
+	:type exercise_id: int
+	"""
 	exercise_to_delete = session.get(Exercise, exercise_id)
 	if exercise_to_delete is None:
 		raise HTTPException(status_code=404,detail="Exercise doesn't Exist!")
 	
 	session.delete(exercise_to_delete)
 	session.commit()
-	
+
